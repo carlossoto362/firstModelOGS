@@ -184,9 +184,9 @@ class MODEL(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.chla = nn.Parameter(torch.ones((1,1), dtype=torch.float32)*60, requires_grad=True)
-        self.NAP = nn.Parameter(torch.ones((1,1), dtype=torch.float32)*50, requires_grad=True)
-        self.CDOM = nn.Parameter(torch.ones((1,1), dtype=torch.float32)*30, requires_grad=True)
+        self.chla = nn.Parameter(torch.ones((1,1), dtype=torch.float32), requires_grad=True)
+        self.NAP = nn.Parameter(torch.ones((1,1), dtype=torch.float32), requires_grad=True)
+        self.CDOM = nn.Parameter(torch.ones((1,1), dtype=torch.float32), requires_grad=True)
 
     def forward(self,x):
         """
