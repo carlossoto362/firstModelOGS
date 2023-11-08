@@ -51,13 +51,13 @@ def absortion_CDOM(lambda_):
     """
     Mass specific absortion coefitient of CDOM.
     """
-    return constant['dCDOM']*np.exp(-constant['sCDOM']*(lambda_ - 450))
+    return constant['dCDOM']*np.exp(-constant['sCDOM']*(lambda_ - 450.))
 
 def absortion_NAP(lambda_):
     """
     Mass specific absortion coefitient of NAP.
     """
-    return constant['dNAP']*np.exp(-constant['sNAP']*(lambda_ - 440))
+    return constant['dNAP']*np.exp(-constant['sNAP']*(lambda_ - 440.))
 
 def absortion(lambda_,chla,CDOM,NAP):
     """
@@ -72,14 +72,15 @@ def Carbon(chla,PAR):
     """
     defined from the carbon to Chl-a ratio: 
     """
-    return (constant['Theta_o'] *  (  np.exp(-(PAR - constant['beta'])/constant['sigma'])/\
-                                  (1+np.exp(-(PAR - constant['beta'])/constant['sigma'])  )) + constant['Theta_min'])*chla
+    return chla/(constant['Theta_o'] *  (  np.exp(-(PAR - constant['beta'])/constant['sigma'])/\
+                                  (1+      np.exp(-(PAR - constant['beta'])/constant['sigma'])  )) + constant['Theta_min'])
+
 
 def scattering_NAP(lambda_):
     """
     NAP mass-specific scattering coeffitient.
     """
-    return constant['eNAP']*(550/lambda_)**constant['fNAP']
+    return constant['eNAP']*(550./lambda_)**constant['fNAP']
 
 def scattering(lambda_,PAR,chla,NAP):
     """
@@ -102,17 +103,17 @@ def backscattering(lambda_,PAR,chla,NAP):
 ###############Functions for the end solution of the equations###########
 
 def c_d(lambda_,zenit,PAR,chla,NAP,CDOM):
-    return (absortion(lambda_,chla,CDOM,NAP) + scattering(lambda_,PAR,chla,NAP))/np.cos(90-zenit)
+    return (absortion(lambda_,chla,CDOM,NAP) + scattering(lambda_,PAR,chla,NAP))/np.cos(zenit*np.pi/180)
 
 def F_d(lambda_,zenit,PAR,chla,NAP):
     """
     The final result is writen in terms of this functions.
     """
     return (scattering(lambda_,PAR,chla,NAP) - constant['rd'] * backscattering(lambda_,PAR,chla,NAP))/\
-        np.cos(90-zenit)
+        np.cos(zenit*np.pi/180.)
 
 def B_d(lambda_,zenit,PAR,chla,NAP):
-    return  constant['rd']*backscattering(lambda_,PAR,chla,NAP)/np.cos(90-zenit) 
+    return  constant['rd']*backscattering(lambda_,PAR,chla,NAP)/np.cos(zenit*np.pi/180) 
 
 def C_s(lambda_,PAR,chla,NAP,CDOM):
     return (absortion(lambda_,chla,CDOM,NAP) + constant['rs'] * backscattering(lambda_,PAR,chla,NAP) )/\
@@ -129,9 +130,9 @@ def C_u(lambda_,PAR,chla,NAP,CDOM):
         constant['vu']
 
 def D(lambda_,PAR,chla,NAP,CDOM):
-    return (1/2) * (C_s(lambda_,PAR,chla,NAP,CDOM) + C_u(lambda_,PAR,chla,NAP,CDOM) + \
+    return (0.5) * (C_s(lambda_,PAR,chla,NAP,CDOM) + C_u(lambda_,PAR,chla,NAP,CDOM) + \
                     ((C_s(lambda_,PAR,chla,NAP,CDOM) + C_u(lambda_,PAR,chla,NAP,CDOM))**2 -\
-                     4 * B_s(lambda_,PAR,chla,NAP) * B_u(lambda_,PAR,chla,NAP) )**(0.5))
+                     4. * B_s(lambda_,PAR,chla,NAP) * B_u(lambda_,PAR,chla,NAP) )**(0.5))
 
 def x(lambda_,zenit,PAR,chla,NAP,CDOM):
     denominator = (c_d(lambda_,zenit,PAR,chla,NAP,CDOM) - C_s(lambda_,PAR,chla,NAP,CDOM)) * \
@@ -165,7 +166,7 @@ def E_u_o(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM):
 #Q=5.33*np.exp(-0.45*np.sin(np.pi/180.*(90.0-Zenith)))
 
 def Q_rs(zenit):
-    return 5.33*np.exp(-0.45*np.sin((np.pi/180)*(90.0-zenit)))
+    return 5.33*np.exp(-0.45*np.sin((np.pi/180.0)*(90.0-zenit)))
 
 def Rrs_minus(Rrs):
     return Rrs/(constant['T']+constant['gammaQ']*Rrs)
@@ -174,7 +175,8 @@ def Rrs_plus(Rrs):
     return Rrs*constant['T']/(1-constant['gammaQ']*Rrs)
 
 def Rrs_MODEL(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM):
-    return Rrs_plus( E_u_o(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM)/(Q_rs(zenit)*(E_dir_o - E_dif_o) ))
+    Rrs = E_u_o(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM)  /  (   Q_rs(zenit)*(E_dir_o + E_dif_o)   )
+    return Rrs_plus( Rrs )
 
 
 
@@ -185,8 +187,8 @@ class MODEL(nn.Module):
     def __init__(self):
         super().__init__()
         self.chla = nn.Parameter(torch.ones((1,1), dtype=torch.float32), requires_grad=True)
-        self.NAP = nn.Parameter(torch.ones((1,1), dtype=torch.float32), requires_grad=True)
-        self.CDOM = nn.Parameter(torch.ones((1,1), dtype=torch.float32), requires_grad=True)
+        self.NAP = nn.Parameter(torch.ones((1,1), dtype=torch.float32)*0.5, requires_grad=True)#the 0.5 is to make it start with a common value
+        self.CDOM = nn.Parameter(torch.ones((1,1), dtype=torch.float32)*0.5, requires_grad=True)
 
     def forward(self,x):
         """
@@ -222,12 +224,13 @@ def train_loop(data_i,model,loss_fn,optimizer,N):
         if i % 1000 == 0:
             ls_val.append(loss.item())
             ls_count.append(i)
-            print(ls_val[-1],ls_count[-1])
+            #print(ls_val[-1],ls_count[-1])
     return ls_val,ls_count,pred
 
 
 #plt.plot(ls_count,ls_val)
 #plt.show()
+
 
 
     
