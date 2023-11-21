@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 """
-runing the inversion model. 
+running the inversion model. 
 
-As part of the National Institut of Oceanography, and Applied Geophysics, I'm working in an invertion problem. A detailed description can be found in ...
+As part of the National Institute of Oceanography, and Applied Geophysics, I'm working on an inversion problem. A detailed description can be found at 
+https://github.com/carlossoto362/firstModelOGS
 
 This program has functions to save the results on files, to read the results in a pandas DataFrame, to compute statistics, and to plot the results. 
 """
@@ -33,19 +34,19 @@ def save_one_result(input_):
     """
     Runs the invertion problem for the bio-optical model, using the loss_function MSELoss(), and the optimizer torch.optim.Adam, 
     then, stores the results in a file in file_+'/'+dates.iloc[date_index].strftime('%Y-%m-%d')+'.csv'. 
-    This function is suposed to be used with a DataFrame of data, a DataFrame of dates and a Dataframe of constants, loaded when importing firstModel.
+    This function is supposed to be used with a DataFrame of data, a DataFrame of dates, and a Dataframe of constants, loaded when importing firstModel.
     Please create the global variables,
     
     >>>data = reed_data()
     >>>data = data[data['lambda']!=670]
     >>>dates = data['date'].drop_duplicates()
     
-    data is a pandas DataFrame with the columns
+    data is a panda DataFrame with columns
     date,lambda,RRS,E_dir,E_dif,zenit,PAR.
     dates is a pandas series, with the dates from data on it. 
 
-    input_ is an iterable with three elements, the first is the index corresponding to the date in the DataFrame: dates. the second one is the file where to store the data, 
-    the third is the number of iterations to used while training. 
+    input_ is iterable with three elements, the first is the index corresponding to the date in the DataFrame: dates. the second one is the file where to store the data, 
+    the third is the number of iterations to be used while training. 
 
     save_one_result(input_) only stores the result for one date. 
     """
@@ -60,7 +61,7 @@ def save_one_result(input_):
     learning_rate = 1e-3 #this is to use gradient descent. 
     loss_function = nn.MSELoss() #MSE, the same used by Paolo
     optimizer = torch.optim.Adam(model.parameters(),lr=learning_rate)
-    #optimizer = torch.optim.LBFGS(model.parameters(),lr=learning_rate) #this requary the closure function, but is much slower. 
+    #optimizer = torch.optim.LBFGS(model.parameters(),lr=learning_rate) #this requires the closure function, but is much slower. 
 
     ls_val = []
     ls_count = []
@@ -90,7 +91,7 @@ def save_results(init_date_index,end_date_index,cores,file_='results',N=4000):
     """
     Runs the invertion problem for the bio-optical model, using the loss_function MSELoss(), and the optimizer torch.optim.Adam, 
     then, stores the results in a file in file_+'/'+dates.iloc[date_index].strftime('%Y-%m-%d')+'.csv'. 
-    This function is suposed to be used with a DataFrame of data, a DataFrame of dates and a Dataframe of constants, loaded when importing firstModel.
+    This function is supposed to be used with a DataFrame of data, a DataFrame of dates, and a Dataframe of constants, loaded when importing firstModel.
     Please create the global variables,
     
     >>>data = reed_data()
@@ -101,7 +102,7 @@ def save_results(init_date_index,end_date_index,cores,file_='results',N=4000):
     date,lambda,RRS,E_dir,E_dif,zenit,PAR.
     dates is a pandas series, with the dates from data on it. 
 
-    save_results uses the function save_one_result to store the data from several dates, and paralelice the process in cores number of cores. 
+    save_results uses the function save_one_result to store the data from several dates and parallelize the process in cores number of cores. 
     """
     
     pool = mp.Pool(cores)
@@ -120,10 +121,10 @@ save_results(0,1,1,file_='.',N=10)
 
 def reed_result(path,data):
     """
-    reeds the results stored in path. The files are suposed to be csv files with columns
+    reeds the results stored in path. The files are supposed to be csv files with columns
     ,510.0,412.5,442.5,490.0,555.0,chla,CDOM,NAP,loss
 
-    This function is suposed to be used with a DataFrame of data, a DataFrame of dates and a Dataframe of constants, loaded when importing firstModel.
+    This function is supposed to be used with a DataFrame of data, a DataFrame of dates, and a Dataframe of constants, loaded when importing firstModel.
     Please create the global variables,
     
     >>>data = reed_data()
@@ -134,7 +135,7 @@ def reed_result(path,data):
     date,lambda,RRS,E_dir,E_dif,zenit,PAR.
     dates is a pandas series, with the dates from data on it. 
     
-    reed_result reads from all the files on path, so make sure that the path has no other file than the results. Each result file has the data of one date, and has
+    reed_result reads from all the files on the path, so make sure that the path has no other file than the results. Each result file has the data of one date, and has
     to be stored in a file named %Y-%m-%d.csv. Is meant to be used after storing the data from the save_results function. 
 
     returns a pandas DataFrame with the columns
@@ -177,8 +178,8 @@ print(results)
 #plot
 def plot_results():
     """
-    Plots the RRS from the model and the RRS read from satellite, both as a function of time. The data is suposed to be stored on a pandas DataFrame with columns
-    date,lambda,RRS,E_dir,E_dif,zenit,PAR,chla,NAP,CDOM,loss. The function is made to plot the result in 5 diferent wavelenghts. 
+    Plots the RRS from the model and the RRS read from the satellite, both as a function of time. The data is supposed to be stored on a pandas DataFrame with columns
+    date,lambda,RRS,E_dir,E_dif,zenit,PAR,chla,NAP,CDOM,loss. The function is made to plot the result in 5 different wavelengths. 
     """
     fig, ax = plt.subplots(2, 3)
     positions = [[0,0],[0,1],[0,2],[1,0],[1,1]]
@@ -220,15 +221,15 @@ def LSE_function(x_data,x_model):
 
 def correlation_function(x_data,x_model):
     """
-    returns the pearson correlation function between two set of data, using the scipy.stats.pearsonr function. 
+    returns the Pearson correlation function between two sets of data, using the scipy.stats.pearsonr function. 
     """
     return pearsonr(x_data,x_model)[0]
 
 def scatter_plot():
 
     """
-    Plots the RRS from the model on the x axis and the RRS read from satellite as the y axis. The data is suposed to be stored on a pandas DataFrame with columns
-    date,lambda,RRS,E_dir,E_dif,zenit,PAR,chla,NAP,CDOM,loss. The function is made to plot the result in 5 diferent wavelenghts. 
+    Plots the RRS from the model on the x axis and the RRS read from the satellite as the y axis. The data is supposed to be stored on a pandas DataFrame with columns
+    date,lambda,RRS,E_dir,E_dif,zenit,PAR,chla,NAP,CDOM,loss. The function is made to plot the result in 5 different wavelengths. 
     """
     fig, ax = plt.subplots(2, 3)
     positions = [[0,0],[0,1],[0,2],[1,0],[1,1]]
@@ -259,7 +260,7 @@ def scatter_plot():
 
 def self_correlation(dat,column):
     """
-    computes the time self correlation. dat is suposed to be a pandas DataFrame, so column is the name of the column with the data, which self correlation is intended to be computed.
+    computes the time self correlation. dat is supposed to be a pandas DataFrame, so the column is the name of the column with the data, which self-correlation is intended to be computed.
     """
     work_data = np.empty((5,int(len(dat)/5-1)))  #I want a matrix win 5 rows and as many columns as days,  minus one, because I will compare it with the shifted data, so I will no use the first data. 
     shift_data = np.empty((5,int(len(dat)/5-1)))
