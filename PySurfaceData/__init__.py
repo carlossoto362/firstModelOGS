@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """
-Module with the functions for the invertion problem of a bio-optical model.
+Module with the functions for the inversion problem of a bio-optical model.
 
-As part of the National Institut of Oceanography, and Applied Geophysics, I'm working in an invertion problem. A detailed description can be found in ...
-this model containes the functions requared to reed the satellite data, and process it, in order to obtain the constituents: (chl-a, CDOM, NAP).
+As part of the National Institute of Oceanography, and Applied Geophysics, I'm working on an invertion problem. A detailed description can be found in the 
+https://github.com/carlossoto362/firstModelOGS.
+this model contains the functions required to read and process the satellite data to obtain the constituents: (chl-a, CDOM, NAP).
 """
 
 __author__ = "Soto López, Carlos Enmanuel (carlos.soto362@gmail.com)"
