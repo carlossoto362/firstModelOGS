@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
 """
-Functions for the invertion problem of a bio-optical model.
+Functions for the inversion problem of a bio-optical model.
 
-As part of the National Institut of Oceanography, and Applied Geophysics, I'm working in an invertion problem. A detailed description can be found in ...
-this model containes the functions requared to reed the satellite data, and process it, in order to obtain the constituents: (chl-a, CDOM, NAP), 
+As part of the National Institute of Oceanography, and Applied Geophysics, I'm working on an invertion problem. A detailed description can be found at
+https://github.com/carlossoto362/firstModelOGS.
+this model contains the functions required to reed the satellite data and process it, in order to obtain the constituents: (chl-a, CDOM, NAP), 
 using the first introduced model. 
 
-When importing this functions, you are also importing numpy, torch, datetime, pandas and os. At the same time, you are reeding the csv's with the constants.
+When importing these functions, you are also importing numpy, torch, datetime, pandas and os. At the same time, you are reading the csv's with the constants.
 
 
 """
@@ -21,7 +22,7 @@ import pandas as pd
 import os
 
 #reading the constants from two csv files, one with the constants dependent on lambda, and the other with
-#the ones that not depend on it.
+#the ones that do not depend on it.
 
 def reed_constants(file1='cte_lambda.csv',file2='cst.csv'):
     """
@@ -52,7 +53,7 @@ constant = reed_constants(file1='cte_lambda.csv',file2='cst.csv')
 def reed_data():
     """
     function that reads the data stored in SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS/surface.yyy-mm-dd_12-00-00.txt
-    reed_data() returns a pandas DataFrame with all the data abailable on SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS.
+    reed_data() returns a pandas DataFrame with all the data available on SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS.
     Each file has to be a csv with the columns
     lambda,RRS,E_dir,E_dif,zenit,PAR.
     
@@ -72,14 +73,14 @@ def reed_data():
 ################Functions for the absortion coefitient####################
 def absortion_CDOM(lambda_):
     """
-    Function that returns the mass specific absortion coefitient of CDOM, function dependent of the wavelenght lambda. 
+    Function that returns the mass-specific absorption coefficient of CDOM, function dependent of the wavelength lambda. 
 
     """
     return constant['dCDOM']*np.exp(-constant['sCDOM']*(lambda_ - 450.))
 
 def absortion_NAP(lambda_):
     """
-    Mass specific absortion coefitient of NAP.
+    Mass specific absorption coefficient of NAP.
     See Gallegos et al., 2011.
     """
     return constant['dNAP']*np.exp(-constant['sNAP']*(lambda_ - 440.))
@@ -107,14 +108,14 @@ def Carbon(chla,PAR):
 
 def scattering_NAP(lambda_):
     """
-    NAP mass-specific scattering coeffitient.
+    NAP mass-specific scattering coefficient.
     eNAP and fNAP constants (equation and values used from Gallegos et al., 2011)
     """
     return constant['eNAP']*(550./lambda_)**constant['fNAP']
 
 def scattering(lambda_,PAR,chla,NAP):
     """
-    Total scattering coeffitient.
+    Total scattering coefficient.
     bW,λ (values interpolated from Smith and Baker, 1981,), bP H,λ (values used
     from Dutkiewicz et al., 2015)
     """
@@ -125,7 +126,7 @@ def scattering(lambda_,PAR,chla,NAP):
 
 def backscattering(lambda_,PAR,chla,NAP):
     """
-    Total backscattering coeffitient.
+    Total backscattering coefficient.
      Gallegos et al., 2011.
     """
     return constant['backscattering_w'][str(lambda_)] + constant['backscattering_PH'][str(lambda_)] * \
@@ -134,80 +135,80 @@ def backscattering(lambda_,PAR,chla,NAP):
 
 
 ###############Functions for the end solution of the equations###########
-#The final result is writen in terms of this functions, see ...
+#The final result is written in terms of these functions, see ...
 
 def c_d(lambda_,zenit,PAR,chla,NAP,CDOM):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return (absortion(lambda_,chla,CDOM,NAP) + scattering(lambda_,PAR,chla,NAP))/np.cos(zenit*np.pi/180)
 
 def F_d(lambda_,zenit,PAR,chla,NAP):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return (scattering(lambda_,PAR,chla,NAP) - constant['rd'] * backscattering(lambda_,PAR,chla,NAP))/\
         np.cos(zenit*np.pi/180.)
 
 def B_d(lambda_,zenit,PAR,chla,NAP):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return  constant['rd']*backscattering(lambda_,PAR,chla,NAP)/np.cos(zenit*np.pi/180) 
 
 def C_s(lambda_,PAR,chla,NAP,CDOM):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return (absortion(lambda_,chla,CDOM,NAP) + constant['rs'] * backscattering(lambda_,PAR,chla,NAP) )/\
         constant['vs']
 
 def B_u(lambda_,PAR,chla,NAP):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return (constant['ru'] * backscattering(lambda_,PAR,chla,NAP))/constant['vu']
 
 def B_s(lambda_,PAR,chla,NAP):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return (constant['rs'] * backscattering(lambda_,PAR,chla,NAP))/constant['vs']
 
 def C_u(lambda_,PAR,chla,NAP,CDOM):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return (absortion(lambda_,chla,CDOM,NAP) + constant['ru'] * backscattering(lambda_,PAR,chla,NAP))/\
         constant['vu']
 
 def D(lambda_,PAR,chla,NAP,CDOM):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return (0.5) * (C_s(lambda_,PAR,chla,NAP,CDOM) + C_u(lambda_,PAR,chla,NAP,CDOM) + \
                     ((C_s(lambda_,PAR,chla,NAP,CDOM) + C_u(lambda_,PAR,chla,NAP,CDOM))**2 -\
@@ -215,10 +216,10 @@ def D(lambda_,PAR,chla,NAP,CDOM):
 
 def x(lambda_,zenit,PAR,chla,NAP,CDOM):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     denominator = (c_d(lambda_,zenit,PAR,chla,NAP,CDOM) - C_s(lambda_,PAR,chla,NAP,CDOM)) * \
         (c_d(lambda_,zenit,PAR,chla,NAP,CDOM) + C_u(lambda_,PAR,chla,NAP,CDOM)) +\
@@ -230,10 +231,10 @@ def x(lambda_,zenit,PAR,chla,NAP,CDOM):
 
 def y(lambda_,zenit,PAR,chla,NAP,CDOM):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     denominator = (c_d(lambda_,zenit,PAR,chla,NAP,CDOM) - C_s(lambda_,PAR,chla,NAP,CDOM)) * \
         (c_d(lambda_,zenit,PAR,chla,NAP,CDOM) + C_u(lambda_,PAR,chla,NAP,CDOM)) +\
@@ -245,29 +246,29 @@ def y(lambda_,zenit,PAR,chla,NAP,CDOM):
 
 def C_plus(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return E_dif_o - x(lambda_,zenit,PAR,chla,NAP,CDOM) * E_dir_o
 
 def r_plus(lambda_,PAR,chla,NAP,CDOM):
     """
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return B_s(lambda_,PAR,chla,NAP)/D(lambda_,PAR,chla,NAP,CDOM)
 
 def E_u_o(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM):
     """
-    This is the analitical solution of the bio-chemical model. (work not published.)
-    E_dif_o is the difracted irradiance in the uper surface of the sea, 
-    E_dir_o is the direct irradiance in the uper surface of the sea, 
-    lambda is the wavelenght, zenit is the zenith angle, PAR the photosynthetic available radiation, chla the
-    chloropyl-a, NAP the Non Algal Particles and CDOM the Colored disolved Organic Mater.
+    This is the analytical solution of the bio-chemical model. (work not published.)
+    E_dif_o is the diffracted irradiance in the upper surface of the sea, 
+    E_dir_o is the direct irradiance in the upper surface of the sea, 
+    lambda is the wavelength, zenit is the zenith angle, PAR is the photosynthetic available radiation, chla the
+    chloropyl-a, NAP the Non Algal Particles, and CDOM the Colored dissolved Organic Mater.
     """
     return C_plus(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM) * r_plus(lambda_,PAR,chla,NAP,CDOM) +\
         y(lambda_,zenit,PAR,chla,NAP,CDOM) * E_dir_o
@@ -286,14 +287,14 @@ def Q_rs(zenit):
 
 def Rrs_minus(Rrs):
     """
-    Empirical solution for the efect of the interface Atmosphere-sea.
+    Empirical solution for the effect of the interface Atmosphere-sea.
      Lee et al., 2002
     """
     return Rrs/(constant['T']+constant['gammaQ']*Rrs)
 
 def Rrs_plus(Rrs):
     """
-    Empirical solution for the efect of the interface Atmosphere-sea.
+    Empirical solution for the effect of the interface Atmosphere-sea.
      Lee et al., 2002
     """
     return Rrs*constant['T']/(1-constant['gammaQ']*Rrs)
@@ -312,15 +313,15 @@ def Rrs_MODEL(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM):
 #################################Putting all together#################################################
 class MODEL(nn.Module):
     """
-    Bio-Optical model pluss corrections, in order to have the Remote Sensing Reflectance, in terms of the invertion problem. 
-    MODEL(x) returns a tensor, with each component been the Remote Sensing Reflectance for each given wavelenght. 
-    if the data has 5 rows, each with diferent wavelenght, RRS will return a vector with 5 components.  RRS has tree parameters, 
-    self.chla is the chlorophil-a, self.NAP the Non Algal Particles, and self.CDOM the Colored Disolved Organic Mather. 
-    Acording to the invertion problem, we whant to estimate them by making this three parameters have two constrains,
-    follow the ecuations of the bio-optical model, plus, making the RRS as close as posible to the value
-    messurede by the satellite.
+    Bio-Optical model plus corrections, in order to have the Remote Sensing Reflectance, in terms of the invertion problem. 
+    MODEL(x) returns a tensor, with each component being the Remote Sensing Reflectance for each given wavelength. 
+    if the data has 5 rows, each with a different wavelength, RRS will return a vector with 5 components.  RRS has tree parameters, 
+    self.chla is the chlorophil-a, self.NAP the Non Algal Particles, and self.CDOM the Colored Dissolved Organic Mather. 
+    According to the invention problem, we want to estimate them by making these three parameters have two constraints,
+    follow the equations of the bio-optical model, plus, making the RRS as close as possible to the value
+    measured by the satellite.
 
-    The parameters are initialiced with random values between 0 and 1.
+    The parameters are initialized with random values between 0 and 1.
     
     """
     def __init__(self):
@@ -343,11 +344,11 @@ class MODEL(nn.Module):
     
 def train_loop(data_i,model,loss_fn,optimizer,N):
     """
-    The train loop evaluates the Remote Sensing Reflectance RRS for each wavelenght >>>pred=model(data_i), evaluates the loss function
+    The train loop evaluates the Remote Sensing Reflectance RRS for each wavelength>>>pred=model(data_i), evaluates the loss function
     >>>loss=loss_fn(pred,y), force the value of the parameters (chla,NAP,CDOM) to be positive, evaluates the gradient of RRS with respect
-    of the parametters, >>>loss.backward(), modifies the value of the parameters acording to the optimizer criterium, >>>optimizer.step(),
-    set the gradient of RRS to cero, and prints the loss for a given number of iterations. This procedure is performed N times. 
-    After N iterations, it returs two lists with the evolution of the loss function, and the last evaluation of the model. 
+    to the parameters, >>>loss.backward(), modifies the value of the parameters according to the optimizer criterium, >>>optimizer.step(),
+    sets the gradient of RRS to cero, and prints the loss for a given number of iterations. This procedure is performed N times. 
+    After N iterations, it returns two lists with the evolution of the loss function and the last evaluation of the model. 
     
     data_i has to be a pandas DataFrame with columns
     """
