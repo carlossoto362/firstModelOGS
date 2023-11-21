@@ -65,7 +65,7 @@ def reed_data():
         date = datetime.strptime(d,'surface.%Y-%m-%d_12-00-00.txt')
         one_data = pd.read_csv('SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS/' + d ,sep=' ',names=names)
         one_data['date'] = [date]*6
-        all_data = all_data.append(one_data,ignore_index=True)
+        all_data = pd.concat([all_data,one_data],ignore_index=True)
         
     return all_data.sort_values(by='date')
 
