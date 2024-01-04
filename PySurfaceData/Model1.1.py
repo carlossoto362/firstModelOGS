@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 
 """
-Functions for learning the constants for the the invertion problem.
+Functions for learning the constants for the inversion problem.
 
-As part of the National Institute of Oceanography, and Applied Geophysics, I'm working on an invertion problem. A detailed description can be found at
+As part of the National Institute of Oceanography, and Applied Geophysics, I'm working on an inversion problem. A detailed description can be found at
 https://github.com/carlossoto362/firstModelOGS.
-the invertion model contains the functions required to reed the satellite data and process it, in order to obtain the constituents: (chl-a, CDOM, NAP), 
+The inversion model contains the functions required to reed the satellite data and process it, in order to obtain the constituents: (chl-a, CDOM, NAP), 
 using the first introduced model.
 
-In addition, some of the constants are now learnable parameters, and there is a function that uses the storical data to learn the parameters. 
+In addition, some of the constants are now learnable parameters, and there is a function that uses the historical data to learn the parameters. 
 """
 import matplotlib.pyplot as plt
 import math
@@ -23,13 +23,20 @@ import os
 import scipy
 from scipy import stats
 import time
-import multiprocessing as mp
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
+import tempfile
+import torch.distributed as dist
+import sys
+
+import warnings
+
 
 #reading the initial value for the constants from two csv files, one with the constants dependent on lambda, and the other with
 #the ones that do not depend on it.
 
 
-def reed_constants(file1='cte_lambda.csv',file2='cst.csv'):
+def read_constants(file1='./cte_lambda.csv',file2='./cst.csv'):
     """
     function that reads the constants stored in file1 and file2. 
     file1 has the constants that are dependent on lambda, is a csv with the columns
@@ -37,8 +44,8 @@ def reed_constants(file1='cte_lambda.csv',file2='cst.csv'):
     file2 has the constants that are independent of lambda, is a csv with the columns
     name,values.
 
-    reed_constants(file1,file2) returns a dictionary with all the constants. To access the absortion_w for examplea, write 
-    constant = reed_constants(file1,file2)['absortion_w']['412.5'].
+    read_constants(file1,file2) returns a dictionary with all the constants. To access the absortion_w for examplea, write 
+    constant = read_constants(file1,file2)['absortion_w']['412.5'].
     """
 
     cts_lambda = pd.read_csv(file1)
@@ -53,17 +60,17 @@ def reed_constants(file1='cte_lambda.csv',file2='cst.csv'):
         constant[cts['name'].iloc[i]] = cts['value'].iloc[i]
     return constant
 
-constant = reed_constants(file1='cte_lambda.csv',file2='cst.csv')
+constant = read_constants(file1='cte_lambda.csv',file2='cst.csv')
 lambdas = np.array([412.5,442.5,490,510,555]).astype(float)
 
 linear_regression=stats.linregress(lambdas,[constant['scattering_PH'][str(lamb)] for lamb in lambdas])
 linear_regression_slope = linear_regression.slope
 linear_regression_intercept = linear_regression.intercept
 
-def reed_data(data_path='./SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS',train=True):
+def read_data(data_path='./SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS',train=True):
     """
     function that reads the data stored in SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS/surface.yyy-mm-dd_12-00-00.txt
-    reed_data() returns a pandas DataFrame with all the data available on SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS.
+    read_data() returns a pandas DataFrame with all the data available on SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS.
     Each file has to be a csv with the columns
     lambda,RRS,E_dir,E_dif,zenit,PAR.
     
@@ -86,23 +93,23 @@ def reed_data(data_path='./SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS',train=True):
     return all_data.sort_values(by='date')
 
 
-def reed_initial_conditions(data,results_path='./results_first_run',lambdas=[510.0,412.5,442.5,490.0,555.0]):
+def read_initial_conditions(data,results_path='./results_first_run',lambdas=[510.0,412.5,442.5,490.0,555.0]):
     """
-    reeds the results stored in results_path. This data is used as initial conditions for the learnings, to make
+    reads the results stored in results_path. This data is used as initial conditions for the learnings, to make
     the learning process for each day faster. The files are supposed to be csv files with columns
     ,510.0,412.5,442.5,490.0,555.0,chla,CDOM,NAP,loss
 
     This function is supposed to be used with a DataFrame of data and a Dataframe of constants.
     Please create the global variables,
     
-    >>>data = reed_data(train=train)
+    >>>data = read_data(train=train)
     >>>data = data[data['lambda'].isin(lambdas)]
-    >>>data = reed_initial_conditions(data,results_path = './results_first_run')
+    >>>data = read_initial_conditions(data,results_path = './results_first_run')
     
     data is a pandas DataFrame with the columns
     date,lambda,RRS,E_dir,E_dif,zenit,PAR.
     
-    reed_result reads from all the files on the path, so make sure that the path has no other file than the results. Each result file has the data of one date, and has
+    read_result reads from all the files on the path, so make sure that the path has no other file than the results. Each result file has the data of one date, and has
     to be stored in a file named %Y-%m-%d.csv. Is meant to be used after storing the data from the save_results function. 
     
     """
@@ -130,15 +137,15 @@ def reed_initial_conditions(data,results_path='./results_first_run',lambdas=[510
 
 def read_kd_data(data,kd_data_path='messure_data/kd_data/BOUSSOLEFit_AntoineMethod_filtered_butterHighpass6days_min.csv',lambdas=[510.0,412.5,442.5,490.0,555.0]):
     """
-    reeds the kd data. The files are supposed to be csv files with columns
+    reads the kd data. The files are supposed to be csv files with columns
     510.0,412.5,442.5,490.0,555.0,chla,NAP,CDOM,loss
 
     This function is supposed to be used with a DataFrame of data, and a Dataframe of constants.
     Please create the global variables,
     
-    >>>data = reed_data(train=train)
+    >>>data = read_data(train=train)
     >>>data = data[data['lambda'].isin(lambdas)]
-    >>>data = reed_initial_conditions(data,results_path = './results_first_run')
+    >>>data = read_initial_conditions(data,results_path = './results_first_run')
     >>>data = read_kd_data(data)
     
     """
@@ -149,14 +156,14 @@ def read_kd_data(data,kd_data_path='messure_data/kd_data/BOUSSOLEFit_AntoineMeth
 
 def read_chla_data(data,chl_data_path='messure_data/buoy.DPFF.2003-09-06_2012-12-31_999.dat',lambdas=[510.0,412.5,442.5,490.0,555.0]):
     """
-    reeds the chla data. The files are supposed to be csv files, including a column with YEAR, MONTH, DAY and chl. 
+    reads the chla data. The files are supposed to be csv files, including a column with YEAR, MONTH, DAY and chl. 
 
     This function is supposed to be used with a DataFrame of data and a Dataframe of constants.
     Please create the global variables,
     
-    >>>data = reed_data(train=train)
+    >>>data = read_data(train=train)
     >>>data = data[data['lambda'].isin(lambdas)]
-    >>>data = reed_initial_conditions(data,results_path = './results_first_run')
+    >>>data = read_initial_conditions(data,results_path = './results_first_run')
     >>>data = read_kd_data(data)
     >>>data = read_chla_data(data)
     
@@ -173,14 +180,14 @@ def read_chla_data(data,chl_data_path='messure_data/buoy.DPFF.2003-09-06_2012-12
 
 def read_bbp_data(data,bbp_data_path='messure_data/boussole_multi_rrs_bbpw_T10_IES20_2006-2012.csv',lambdas=[510.0,412.5,442.5,490.0,555.0]):
     """
-    reeds the bbp data. The files are supposed to be csv files, including a column with YEAR, MONTH, DAY and bbp_550,bbp_488 and bbp_442. 
+    reads the bbp data. The files are supposed to be csv files, including a column with YEAR, MONTH, DAY and bbp_550,bbp_488 and bbp_442. 
 
     This function is supposed to be used with a DataFrame of data and a Dataframe of constants.
     Please create the global variables,
     
-    >>>data = reed_data(train=train)
+    >>>data = read_data(train=train)
     >>>data = data[data['lambda'].isin(lambdas)]
-    >>>data = reed_initial_conditions(data,results_path = './results_first_run')
+    >>>data = read_initial_conditions(data,results_path = './results_first_run')
     >>>data = read_kd_data(data)
     >>>data = read_chla_data(data)
     >>>data = read_bbp_data(data)
@@ -306,7 +313,7 @@ def backscattering(lambda_,PAR,chla,NAP,perturbation_factors,tensor=True):
     perturbation_factors is a dictionary with all the parameters that are been optimices in this Model. Are multiplicative factors between 0 and 2, that modify the value
     of some of the constants of the bio quimical model. The variable "tensor" specify if the input and output of the function is a torch.tensor. 
     """
-    return constant['backscattering_w'][str(lambda_)] + constant['backscattering_PH'][str(lambda_)] * \
+    return constant['backscattering_w'][str(lambda_)] + perturbation_factors['mul_factor_backscattering_ph']*constant['backscattering_PH'][str(lambda_)] * \
         Carbon(chla,PAR,perturbation_factors,tensor=tensor) + perturbation_factors['mul_factor_backscattering_nap']*0.005 * scattering_NAP(lambda_,tensor=tensor) * NAP
 
 
@@ -552,7 +559,7 @@ def bbp(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM,perturbation_factors,ten
     of some of the constants of the bio quimical model. The variable "tensor" specify if the input and output of the function is a torch.tensor. 
     """
     if tensor == False:
-        return constant['backscattering_PH'][str(lambda_)] * \
+        return constant['backscattering_PH'][str(lambda_)] * perturbation_factors['mul_factor_backscattering_ph'] * \
         Carbon(chla,PAR,perturbation_factors,tensor=tensor) + perturbation_factors['mul_factor_backscattering_nap']*0.005 * scattering_NAP(lambda_,tensor=tensor) * NAP
     else:
         return constant['backscattering_PH'][str(lambda_)] * \
@@ -625,7 +632,7 @@ def Rrs_MODEL(E_dif_o,E_dir_o,lambda_,zenit,PAR,chla,NAP,CDOM,perturbation_facto
 #################################Putting all together#################################################
 class MODEL(nn.Module):
     """
-    Bio-Optical model plus corrections, in order to have the Remote Sensing Reflectance, in terms of the invertion problem. 
+    Bio-Optical model plus corrections, in order to have the Remote Sensing Reflectance, in terms of the inversion problem. 
     MODEL(x) returns a tensor, with each component being the Remote Sensing Reflectance for each given wavelength. 
     if the data has 5 rows, each with a different wavelength, RRS will return a vector with 5 components.  RRS has tree parameters, 
     self.chla is the chlorophil-a, self.NAP the Non Algal Particles, and self.CDOM the Colored Dissolved Organic Mather. 
@@ -697,11 +704,11 @@ def train_loop(data_i,model,loss_fn,optimizer,N,perturbation_factors):
     #file_.close()
     return ls_val,ls_count,pred
 
-def run_invertion(x_data_tensor_T,perturbation_factors,cores=40):
-	"""
-	Designed to make multiple inversion problems in paralel manner. Because of conflicts with pytorch, I end up dont making it on parallen manually.
+def run_inversion(x_data_tensor_T,perturbation_factors,rank,world_size):
+    """
+    Designed to make multiple inversion problems in paralel manner. Because of conflicts with pytorch, I end up dont making it on parallen manually.
 
-	It runs the invertion problem for N diferent days.
+	It runs the inversion problem for N diferent days.
 
 	x_data_tensor_T is a 26*N torch.tensor, with each column representing the quantities:
 	col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17,col18,col19,col20,col21,col22,col23,col24,col25,col26
@@ -714,41 +721,82 @@ def run_invertion(x_data_tensor_T,perturbation_factors,cores=40):
 	The output is a 9*N torch.tensor, with columns representing
 	col1,col2,col3,col4,col5,col6,col7,col8,col9
         chla,kd555,kd510,kd490,kd442,kd412,bbp555,bbp490,bbp442
-	"""
-	#time_one_batch = time.time()
-	x_data_size = x_data_tensor_T.size()[0]
-	x_result = torch.empty(x_data_size,9)
-	#pool = mp.Pool(cores)
-	input = []
-	for ind in range(x_data_size):
-		input.append([ind,x_data_tensor_T[ind],perturbation_factors])
-	results_ = []
-	for input_i in input:
-		results_.append(run_one_invertion(input_i))
-	#results_ = pool.map(run_one_invertion,input)
-	#print('One minibatch done..., time used: ' + str(time.time() - time_one_batch))
-	for result_ in results_:
-		x_result[result_[0]] = result_[1]
-	
-	#pool.close()
-	return x_result
+    """
 
-def run_one_invertion(input):
+    boss = 0
+    num_workers = world_size - 1
+    
+    x_data_size = x_data_tensor_T.size()[0]
+    x_result = torch.empty(x_data_size,9)
+    #x_result_workers = torch.empty(num_workers,9)
+    #pool = mp.Pool(cores)
+    #input = []
+    job = 0
+    #dist.barrier()
+    """
+    while job < x_data_size:
+        for worker_iter in range(1,num_workers+1):
+            if rank == worker_iter:
+                x_result_workers[worker_iter-1] = run_one_inversion([job,x_data_tensor_T[job],perturbation_factors,x_result])[1]
+                dist.send(tensor=x_result_workers[worker_iter-1], dst=boss)
+                #print("sending job {} from worker {}.".format(job+1,rank))
+            job+=1
+            if job == x_data_size:
+                break
+        last_worker = worker_iter
+        if rank == boss:
+            for worker_iter in range(1,last_worker + 1):
+                dist.recv(tensor=x_result_workers[worker_iter-1],src=worker_iter)
+                #print("receive job {} from worker {}, last job in process is {}.".format(job-last_worker + worker_iter,worker_iter,job))
+                x_result[job-last_worker + worker_iter-1] = x_result_workers[worker_iter-1]
+    """
+
+    """
+    last_job = 0
+    x_result_fut = []
+    while job < x_data_size:
+        for worker_iter in range(1,num_workers+1):
+            input_ = [job,x_data_tensor_T[last_job + worker_iter - 1],perturbation_factors]
+            x_result_fut.append(dist.rpc.rpc_async(worker_iter, run_one_inversion, args=(input_),timeout=60*10) )
+            job+=1
+            if job == x_data_size:
+                break
+        last_job = job
+
+    for xr in range(len(x_result_fut)):
+        x_result[xr] = x_result_fut[xr].wait()
+    print(x_result[0])
+    #dist.barrier()
+    """
+    job = 0
+    for x_data_tensor in x_data_tensor_T:
+        x_result[job] = run_one_inversion(job,x_data_tensor,perturbation_factors)
+        job+=1
+    return x_result
+
+
+
+
+    #if rank == boss:
+    #    return x_result
+
+
+def run_one_inversion(x_index,x_data_tensor,perturbation_factors):
         """
-	Runs the invertion problem for the bio-optical model, using the loss_function MSELoss(), and the optimizer torch.optim.Adam.
+	Runs the inversion problem for the bio-optical model, using the loss_function MSELoss(), and the optimizer torch.optim.Adam.
 
 	This function is supposed to be used with a DataFrame of data and a Dataframe of constants.
 
 	input is an iterable, with three elements, the first is an index, in order preserved the ordering of the elements, in case is needed. 
-	the second is x_data_tensor, descrived in the function run_invertion, and the last one is the perturbation_factors, also described in
+	the second is x_data_tensor, descrived in the function run_inversion, and the last one is the perturbation_factors, also described in
 	run_inversion.
 
         """
-    
-        x_data_tensor = input[1]
-        x_index = input[0]
-        perturbation_factors = input[2]
-        #timeInit=time.time()
+
+        #x_data_tensor = input[1]
+        #x_index = input[0]
+        #perturbation_factors = input[2]
+        timeInit=time.time()
         x_data = pd.DataFrame()
         dates_ = []
         lambdas = []
@@ -796,7 +844,6 @@ def run_one_invertion(input):
         loss_function = nn.MSELoss() #MSE, the same used by Paolo.
         optimizer = torch.optim.Adam(model.parameters(),lr=learning_rate)
         #optimizer = torch.optim.LBFGS(model.parameters(),lr=learning_rate) #this requires the closure function, but is much slower.
-
         ls_val,ls_count,pred = train_loop(x_data,model,loss_function,optimizer,N,perturbation_factors)
 
         for par in model.parameters():
@@ -822,8 +869,9 @@ def run_one_invertion(input):
 
             x_result_i[i+1] =  kd(9.,x_data['E_dif'].iloc[i],x_data['E_dir'].iloc[i],x_data['lambda'].iloc[i],x_data['zenit'].iloc[i],\
                             x_data['PAR'].iloc[i],chla,nap,cdom,perturbation_factors)
-        #print('time used to save '+ x_data['date'].iloc[0].strftime('%Y-%m-%d') + ', '+str(time.time() - timeInit)+' seconds')
-        return x_index,x_result_i
+        #print('Im worker in job ',x_index,'time used to save '+ x_data['date'].iloc[0].strftime('%Y-%m-%d') + ', '+str(time.time() - timeInit)+' seconds')
+        #print(x_result_i)
+        return x_result_i
 
 
 
@@ -833,7 +881,7 @@ class customTensorData():
     """
     def __init__(self, initial_conditions_path,data_path,train=True, transform=None, target_transform=None):
 
-        timeInitI = time.time()
+        #timeInitI = time.time()
         initial_perturbation_factors = {
             'mul_factor_a_ph':1,
             'mul_tangent_b_ph':1,
@@ -850,9 +898,9 @@ class customTensorData():
             'mul_factor_backscattering_nap':1,
         }
         
-        data = reed_data(train=train)
+        data = read_data(train=train)
         data = data[data['lambda'].isin(lambdas)]
-        data = reed_initial_conditions(data,results_path = './results_first_run')
+        data = read_initial_conditions(data,results_path = './results_first_run')
         data = read_kd_data(data)
         data = read_chla_data(data)
         data = read_bbp_data(data)
@@ -865,6 +913,7 @@ class customTensorData():
                      data['zenit'].iloc[i],data['PAR'].iloc[i],data['chla'].iloc[i],data['NAP'].iloc[i],data['CDOM'].iloc[i],\
                      initial_perturbation_factors,tensor=False) for i in range(len(data))]
         data = data.sort_values(by=['date','lambda'])
+
         labels = pd.DataFrame()
         labels['chla_d'] = data['buoy_chla'][data['lambda']==555].to_numpy()
         labels['kd_d_555'] = data['kd_filtered_min'][data['lambda']==555].to_numpy()
@@ -911,19 +960,23 @@ class customTensorData():
         
 
         images['date'] = [(d - datetime(year=2000,month=1,day=1)).days for d in data['date'][data['lambda']==555].iloc[:] ]
-        
+        labels = labels.dropna(how='all')
+        images = images.iloc[labels.index.tolist()] 
         self.labels = labels
+
         self.transform = transform
         self.target_transform = target_transform
         self.images = images
         self.dates = data['date'][data['lambda']==555]
+        self.labels_stds = self.labels.std()
+        self.images_stds = self.images.std()
 
-        if train ==True:
-            print('Time spended in reading the train data: ' + str(time.time() - timeInitI))
-            print('shape of train data: ',self.images.shape)
-        else:
-            print('Time spended in reading the test data: ' + str(time.time() - timeInitI))
-            print('shape of test data: ',self.images.shape)
+        #if train ==True:
+            #print('Time spended in reading the train data: ' + str(time.time() - timeInitI))
+            #print('shape of train data: ',self.images.shape)
+        #else:
+            #print('Time spended in reading the test data: ' + str(time.time() - timeInitI))
+            #print('shape of test data: ',self.images.shape)
 
     def __len__(self):
         return len(self.labels)
@@ -945,7 +998,9 @@ class customTensorData():
         if self.target_transform:
             label = self.target_transform(label)
         return image, label
-
+    
+    def get_stds(self):
+        return torch.tensor(self.images_stds.values),torch.tensor(self.labels_stds.values)
 
 class Parameter_Estimator(nn.Module):
     """
@@ -983,39 +1038,22 @@ class Parameter_Estimator(nn.Module):
             'mul_factor_backscattering_nap':self.mul_factor_backscattering_nap,
     }
 
-    def forward(self,image,cores=40):
+    def forward(self,image,rank,world_size):
         """
         x_data: pandas dataframe with columns [E_dif,E_dir,lambda,zenit,PAR].
         """
 
-        return run_invertion(image,self.perturbation_factors,cores=cores)
+        return run_inversion(image,self.perturbation_factors,rank,world_size)
 
-def custom_LSELoss(input,output):
+def custom_LSELoss(input,output,stds):
 	"""
 	My data has some nan on it, so this function returns the least square error loss function, taking into consideration the nan elements.
-	"""
-	custom_array = (output-input)**2
-	sum_ = 0
-	k_ = 0
-	for element in custom_array:
-		sum2_ = 0
-		k2_ = 0
-		for element2 in element:
-
-			if math.isnan(element2):
-				pass
-			else:
-				sum2_ += element2
-				k2_ += 1
-		if k2_ == 0: 
-			pass
-		else:
-			sum_ += sum2_/k2_
-			k_ +=1
-	if k_ == 0 :
-		return input.mean()*torch.rand(1)
-	else:
-		return sum_/k_
+	""" 
+	custom_array = ((output-input)/stds)**2
+	lens = torch.tensor([len(element[element!=0]) for element in output])
+	means_output = custom_array.sum(axis=1)/lens
+	return means_output.sum()
+    
 
 class WeightClipper(object):
     """
@@ -1031,128 +1069,227 @@ class WeightClipper(object):
             w = w.clamp(0.001,1.999)
             module.weight.data = w
 
-def train_loop_parameters(dataloader, model_par, loss_fn_par, optimizer_par,cores=40):
+
+
+def train_loop_parameters(dataloader, model_par, loss_fn_par, optimizer_par,labels_stds,rank,world_size,batch_size,learning_rate):
     """
 	train loop for the learning of the perturbation factors. It has an scheduler in order to increase the velocity of convergence, and a cliper, to set 
 	a constrains in the parameters. 
     """
     # Set the model to training mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
-    num_batch = 0
-    training_parameters_file = open('training_parameters.csv','w')
-    
+    job_ = 0
+    last_job = 0
+    len_batches = len(dataloader)
     scheduler_par = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_par, 'min')
-    for batch, (X, y) in enumerate(dataloader):
-        one_batch_time = time.time()
-        # Compute prediction and loss
-        pred = model_par(X,cores=cores)
-        loss = loss_fn_par(pred, y)
-        num_batch+=1
-        print('batch: ',num_batch,'time used: ',time.time() - one_batch_time,'loss: ',loss.item())
-        print(list(model_par.parameters()),file = training_parameters_file)
-        # Backpropagation
-        loss.backward()
-        optimizer_par.step()
-        optimizer_par.zero_grad()
 
+    batches = list(enumerate(dataloader))
+    while job_ < len_batches:
+        if rank == 0:
+            training_parameters_file = open('training_parameters_'+str(batch_size)+'_'+str(learning_rate)+'.csv','a')
+        
+        if rank == 0:
+            print('starting batch',job_,'to',job_+world_size,'from',len_batches)
+            batch_init_time = time.time()
+
+        for work_iter in range(world_size):
+            if rank == work_iter:
+                batch = batches[last_job + work_iter][0]
+                X = batches[last_job + work_iter][1][0]
+                y_nan = batches[last_job + work_iter][1][1]
+                y = torch.masked_fill(y_nan,torch.isnan(y_nan),0)
+                pred = model_par(X,rank,world_size)
+                pred = torch.masked_fill(pred,torch.isnan(y_nan),0)
+                loss = loss_fn_par(pred,y,labels_stds)
+                loss.backward()
+            job_ += 1
+            if job_ == len_batches:
+                break
+        last_worker = work_iter
+        last_job = job_
+        for i in range(len(list(model_par.parameters()))):
+            dist.all_reduce(tensor=list(model_par.parameters())[i].grad, op = dist.ReduceOp.SUM)
+            list(model_par.parameters())[i].grad /= batch_size*(last_worker+1)
+        dist.all_reduce(loss,op = dist.ReduceOp.SUM)
+        loss /= batch_size*(last_worker+1)
+        
+        optimizer_par.step()
         cliper = WeightClipper()
         model_par.apply(cliper)
-
         scheduler_par.step(loss)
+        for i in range(len(list(model_par.parameters()))):
+            dist.broadcast( tensor = list(model_par.parameters())[i],src=0 ) # just to be shure that all the workers have the same parameters.
+        dist.barrier()
+        if rank == 0:
+            training_parameters_file.write('# '+ str(job_) + ' to ' + str(job_+world_size) + ' from ' + str(len_batches) + ', time used, ' + str(time.time() - batch_init_time) +  '\n')
+            for i in range(len(list(model_par.parameters()))):
+                num_print = list(model_par.parameters())[i].clone().detach().numpy()[0][0]
+                training_parameters_file.write(str(num_print) + ',')
+            training_parameters_file.write(str(loss.clone().detach().numpy())+'\n')
+            print('time used for',last_worker,'batches', time.time() - batch_init_time)
+            training_parameters_file.close()
+        optimizer_par.zero_grad()
+        
 
 
-    training_parameters_file.close()
-
-def test_loop_parameters(dataloader, model_par, loss_fn_par,cores=40):
+def test_loop_parameters(dataloader, model_par, loss_fn_par,labels_stds,rank,world_size,batch_size,learning_rate):
     """
 	test loop, that evaluates the model with the dataloader. 
     """
     # Set the model to evaluation mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
+    dist.barrier()#training until all the cores are in this point
+    if rank == 0:
+        print('starting test...')
+        batch_init_time = time.time()
     model_par.eval()
-    
-    num_batches = len(dataloader)
     test_loss = 0
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
     for param in model_par.parameters():
         param.requires_grad = False
 
-    #pool = mp.Pool(cores)
-    #results_ = pool.map(test_loss_add,[(X_,model_par,loss_fn_par) for X_ in dataloader])
-    #test_loss = [result_[0] for result_ in results_ ]
-    #pool.close()
-    #test_loss = np.mean(test_loss)
     num_batch = 0
-    for X, y in dataloader:
-        one_batch_time = time.time()
-        pred = model_par(X,cores=cores)
-        #print(pred)
-        #chla,kd555,kd510,kd490,kd442,kd412,bbp555,bbp490,bbp442
-        #print(y)
-        test_loss += loss_fn_par(pred, y)
-        num_batch+=1
-        print('batch: ',num_batch,'time used: ',time.time() - one_batch_time,'loss: ',test_loss/num_batch)
-    test_loss = test_loss/num_batch
+    len_batches = len(dataloader)
+    torch.manual_seed(2809)
+    batches = list(enumerate(dataloader))
+    job_ = 0
+    last_job = 0
+    while job_ < len_batches:
+        
+        dist.barrier()
+        loss = torch.tensor(0)
+        for work_iter in range(world_size):
+            if rank == work_iter:
+                batch = batches[last_job + work_iter][0]
+                X = batches[last_job + work_iter][1][0]
+                y_nan = batches[last_job + work_iter][1][1]
+                y = torch.masked_fill(y_nan,torch.isnan(y_nan),0)
+                pred = model_par(X,rank,world_size)
+                pred = torch.masked_fill(pred,torch.isnan(y_nan),0)
+                loss = loss_fn_par(pred,y,labels_stds)
+            job_ += 1
+            if job_ == len_batches:
+                break
+        last_worker = work_iter
+        last_job = job_
+        dist.all_reduce(tensor=loss, op = dist.ReduceOp.SUM)
+        test_loss += loss
+        dist.barrier()
+    test_loss /= len_batches*batch_size
     for param in model_par.parameters():
         param.requires_grad = True
-    print(f"Avg loss: {test_loss:>8f} \n")
+    if rank == 0:
+        training_parameters_file = open('training_parameters_test_'+str(batch_size)+'_'+str(learning_rate)+'.csv','a')
+        training_parameters_file.write("Avg loss: {:.8f},".format(test_loss.clone().detach().numpy()))
+        for i in range(len(list(model_par.parameters()))):
+            num_print = list(model_par.parameters())[i].clone().detach().numpy()[0][0]
+            if i != len(list(model_par.parameters()))-1:
+                end = ','
+            else:
+                end = '\n'
+            training_parameters_file.write(str(num_print) + end)
+        training_parameters_file.close()
+        print('time used for test:' ,time.time() - batch_init_time)
 
 
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
 
+    # initialize the process group
+    torch.distributed.init_process_group("gloo", rank=rank, world_size=world_size,timeout = timedelta(seconds=60*30*100))
+    if rank == 0:
+        name = 'boss'
+    else:
+        name = 'worker{}'.format(rank)
+    #dist.rpc.init_rpc(name, rank=rank, world_size=world_size)
 
-if __name__ == "__main__":
-
-    time_zero=time.time()
-    device = (
-	    "cuda"
-	    if torch.cuda.is_available()
-	    else "cpu"
-    )
-    print(f"Using {device} device")
-    initial_conditions_path = '/Users/carlos/Documents/surface_data_analisis/results_first_run'
-    data_path = '/Users/carlos/Documents/surface_data_analisis/SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS'
-    train_data = customTensorData(initial_conditions_path,data_path)
-    test_data = customTensorData(initial_conditions_path,data_path,train=False)
-
-    learning_rate = 1
-    batch_size = 40
-    epochs = 10
-
-    train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=False,num_workers=40)
-    test_dataloader = DataLoader(test_data, batch_size=5, shuffle=False,num_workers=40)
-
-    model_par = Parameter_Estimator()
-    #loss_fn_par = nn.MSELoss()
-    loss_fn_par = custom_LSELoss
-
-    optimizer_par = torch.optim.SGD(model_par.parameters(), lr=learning_rate)
-
-    #next_iteration_image,next_iteration_label = next(iter(train_dataloader))
-    for t in range(epochs):
-        print("Epoch: ",t)
-        train_loop_parameters(train_dataloader,model_par,loss_fn_par,optimizer_par)
-        test_loop_parameters(test_dataloader, model_par, loss_fn_par,cores=40)
-    print("Done")
-
-    #for i, (batch_x, batch_y) in enumerate(test_dataloader):
-    #    print(f"Batch {i}: input shape {batch_x.shape}, label shape {batch_y.shape}")
-    initial_perturbation_factors = {
-            'mul_factor_a_ph':1,
-            'mul_tangent_b_ph':1,
-            'mul_intercept_b_ph':1,
-            'mul_factor_a_cdom':1,
-            'mul_factor_s_cdom':1,
-            'mul_factor_q_a':1,
-            'mul_factor_q_b':1,
-            'mul_factor_theta_min':1,
-            'mul_factor_theta_o':1,
-            'mul_factor_beta':1,
-            'mul_factor_sigma':1,
-            'mul_factor_backscattering_ph':1,
-            'mul_factor_backscattering_nap':1,
-    }    
-
-    #result = run_invertion(next_iteration_image,initial_perturbation_factors)
-    print('total time for: '+ str(time.time() - time_zero))
+def cleanup():
+    dist.destroy_process_group()
+    #dist.rpc.shutdown()
     
+
+    
+
+def parallel_training(rank,world_size,batch_size,learning_rate):
+    
+    warnings.filterwarnings('ignore')
+    pd.options.mode.chained_assignment = None
+    boss = 0
+    setup(rank,world_size)
+    if rank == boss:
+        time_zero=time.time()
+    
+    device = (
+	"cuda"
+	if torch.cuda.is_available()
+	else "cpu"
+    )
+    
+    initial_conditions_path = '/g100/home/userexternal/csotolop/surface_data_analisis/results_first_run'
+    data_path = '/g100/home/userexternal/csotolop/surface_data_analisis/SURFACE_DATA_ONLY_SAT_UPDATED_CARLOS'
+    train_data = customTensorData(initial_conditions_path,data_path)
+    labels_stds = train_data.get_stds()[1]
+    test_data = customTensorData(initial_conditions_path,data_path,train=False)
+    #labels_means = test_data.get_means()[1]
+    
+    learning_rate = float(learning_rate)
+    batch_size = int(batch_size)
+    epochs = 6
+
+    train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)  #next_iteration_image,next_iteration_label = next(iter(train_dataloader))
+    test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=False) 
+    #train_dataloader = test_dataloader
+    model_par = Parameter_Estimator()
+    #model_par = DDP(model_par, device_ids=[rank])
+
+    loss_fn_par = custom_LSELoss
+    optimizer_par = torch.optim.Adam(model_par.parameters(), lr=learning_rate)
+
+    dist.barrier()    
+    if rank == boss:
+        print('time to load data and the model: ', time.time() - time_zero)
+        training_time = time.time()
+
+    test_loop_parameters(test_dataloader, model_par, loss_fn_par,labels_stds,rank,world_size,batch_size,learning_rate)
+        
+    for t in range(epochs):
+        if rank == 0:
+            print("Epoch: ",t)
+        train_loop_parameters(train_dataloader,model_par,loss_fn_par,optimizer_par,labels_stds,rank,world_size,batch_size,learning_rate)
+        test_loop_parameters(test_dataloader, model_par, loss_fn_par,labels_stds,rank,world_size,batch_size,learning_rate)
+    if rank == boss:
+        print('total time: '+ str(time.time() - time_zero))
+    cleanup()
+    
+
+    
+def run_demo(demo_fn, world_size,batch_size,learning_rate):
+    processes = []
+    try:
+        for rank in range(world_size):
+            p = mp.Process(target=demo_fn, args=(rank,world_size,batch_size,learning_rate))
+            p.start()
+            processes.append(p)
+
+        for p in processes:
+            p.join()
+    except KeyboardInterrupt:
+        for rank in range(world_size):
+            print('Terminating Process ',rank)
+            p.terminate()
+            
+
+if __name__ == '__main__':
+    if len(sys.argv)>1:
+        minibatch_size = sys.argv[1]
+        learning_rate = sys.argv[2]
+    else:
+        minibatch_size = 40
+        learning_rate = 0.0005
+    for batch_size in [minibatch_size]:
+        run_demo(parallel_training, 40,batch_size,learning_rate)
+
+        
+
